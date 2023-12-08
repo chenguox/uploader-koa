@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <style>
+    #uploadCube {
+      margin-top: 10px;
+      /* width: 520px; */
+      overflow: hidden;
+    }
+
+    .cube {
+      width: 50px;
+      height: 50px;
+      background-color: #fff;
+      float: left;
+      border: 1px solid #000;
+      .progress {
+        height: 100%;
+        line-height: 50px;
+        text-align: center;
+      }
+      .uploading {
+        background-color: #409eff;
+      }
+      .success {
+        background-color: #51f400;
+      }
+      .error {
+        background-color: #ff9090;
+      }
+    }
+  </style>
+  <body>
+    <input type="file" id="file" />
+    <button id="uploadButton">点击上传</button>
+    <div id="uploadCube"></div>
+
+    <script>
+      /**
+       * 默认切片大小 10 MB
+       */
+      const SIZE = 10 * 1024 * 1024;
+
+      /**
+       * 功能：生成切片
+       */
+      function handleCreateChunk(file, size = SIZE) {
+        progressData = [];
+        const fileChunkList = [];
+        let cur = 0;
+        while (cur < file.size) {
+          fileChunkList.push({
+            file: file.slice(cur, cur + size),
+          });
+          cur += size;
+        }
+        return fileChunkList;
+      }
+
+      /**
+       * 功能：封装请求
+       * @param {*} param0
+       * @returns
+       */
+      function request({
+        url,
+        method = "post",
+        data,
+        header = {},
+        requestList,
+      }) {
+        return new Promise((resolve, reject) => {
+          let xhr = new XMLHttpRequest();
+          xhr.open(method, url);
+          Object.keys(header).forEach((item) => {
+            xhr.setRequestHeader(item, header[item]);
+          });
+          xhr.onloadend = function (e) {
+            resolve({
+              data: e.target.response,
+            });
+          };
+          xhr.send(data);
+        });
+      }
+
+      /**
+       * 功能： 上传切片
+       * 包装好 FormData 之后通过 Promise.all() 并发所有切片
+       */
+      async function uploadChunks(hanldleData, fileName) {
+        const requestList = hanldleData
+          .map(({ chunk, hash }) => {
+            const formData = new FormData();
+            formData.append("chunk", chunk);
+            formData.append("hash", hash);
+            formData.append("name", '8888');
+            console.log(formData)
+            return formData;
+          })
+          .map((formData) => {
+            request({
+              // url: 'http://localhost:3001/upload',
+              url: "upload",
+              data: formData,
+            });
+          });
+
+        await Promise.all(requestList);
+      }
+
+      /**
+       * 功能：触发上传
+       */
+      document.getElementById("uploadButton").onclick = async function () {
+        // 切片
+        const file = document.getElementById("file").files[0];
+        console.log(file);
+        const fileName = file.name;
+        const fileChunkList = handleCreateChunk(file);
+        // 包装
+        const hanldleData = fileChunkList.map(({ file }, index) => {
+          return {
+            chunk: file,
+            hash: `${fileName}_${index}`,
+          };
+        });
+        await uploadChunks(hanldleData, fileName);
+      };
+
+      /**
+       * 功能：生成页面进度的 HTML
+       */
+      function handleUpdateHTML(progressData) {
+        let uploadCube = document.querySelector("#uploadCube");
+        let html = "";
+        progressData.forEach((item) => {
+          const { presentage } = item;
+          let className = "";
+          if (presentage < 100) {
+            className = "progress uploading";
+          } else if (presentage == 100) {
+            className = "progress success";
+          }
+          html += ` <div class="cube">
+    <div class="${className}" style="width: ${presentage}%">${presentage}%</div>
+  </div>`;
+        });
+        uploadCube.innerHTML = html;
+      }
+
+      /**
+       * 功能：处理每个 chunk 的 xhr.upload.onprogress，拿到各个 chunk 的上传进度
+       * - 1. 同时通过 handleUpdateHTML 更新进度页面
+       * - 2. progressData 用来记录各个 chunk 的进度
+       */
+      let progressData = [];
+      function handleCreateOnProgress(data) {
+        return (e) => {
+          data.presentage = ((e.loaded / e.total) * 100).toFixed(2);
+          console.log(JSON.stringify(progressData));
+          handleUpdateHTML(progressData);
+        };
+      }
+    </script>
+  </body>
+</html>
