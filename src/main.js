@@ -68,7 +68,7 @@ uploadRouter.post("/", upload.single("chunk"), (ctx, next) => {
   // console.log('ctx.request.body', ctx.request.body);
 
   const chunk = ctx.file.buffer;
-  const filename = ctx.request.body.filename;
+  const filename = `${ctx.request.body.chunkHash}_${ctx.request.body.index}`;
 
   // 创建 uploads 文件夹
   const uploadDir = path.join(__dirname, '../uploads')
@@ -79,28 +79,60 @@ uploadRouter.post("/", upload.single("chunk"), (ctx, next) => {
   const writeStream = fs.createWriteStream(`./uploads/${filename}`);
   writeStream.end(chunk);
 
-  ctx.body = "done";
+  ctx.body = {
+    code: 200
+  }
 });
 
-uploadRouter.post("/merge", async (ctx) => {
+// 文件合并请求
+uploadRouter.post("/merge", async (ctx, next) => {
   // console.log(ctx);
-  const { fileName, size } = ctx.request.body;
-  hasMergeChunk = {};
+  const { fileHash, filename, size } = ctx.request.body;
+  // hasMergeChunk = {};
+  const ext = path.extname(filename)
+
   // 文件合并后的路径
-  // const mergePath = `${__dirname}/merge/${fileName}`;
+  // const mergePath = `${__dirname}/merge/${filename}`;
   const mergeDir = path.join(__dirname, `../merge`)
-  const mergePath = path.join(mergeDir, `${fileName}`)
+  const mergePath = path.join(mergeDir, `${fileHash + ext}`)
   console.log("mergePath:", mergeDir, mergePath);
   // 没有就先创建
   if (!fse.existsSync(mergeDir)) {
     fse.mkdirSync(mergeDir);
   }
+
   // 开始合并分片
-  await mergeChunk(mergePath, fileName, size);
+ const result = await mergeChunk(mergePath, filename, size);
+
   ctx.body = {
-    data: "成功",
+    data: result,
   };
+
+  await next()
 });
+
+// 文件上传预检
+uploadRouter.post("/verify", (ctx, next) => {
+  console.log('===')
+  const {filename, fileHash } = ctx.request.body
+  console.log(filename, fileHash)
+  const ext = path.extname(filename)
+
+  const filePath = path.join(__dirname, '../merge', `${fileHash}${ext}`)
+  console.log('查找文件的地址为：', filePath)
+
+  const result = fs.existsSync(filePath)
+  console.log('文件是否找到：', result)
+
+  ctx.body = {
+    data: result
+  }
+})
+
+
+// uploadRouter.post("/verFileIsExixt", async (ctx) => {
+
+// })
 
 // 多文件上传
 // uploadRouter.post("/multer", upload.fields([{

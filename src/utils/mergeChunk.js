@@ -61,9 +61,7 @@ function pipeStream(path, writeStream) {
       fse.unlinkSync(path); // 删除文件
       resolve();
       console.log(
-        `合并 No.${path.split("_")[1]}, 已经合并${
-          Object.keys(hasMergeChunk).length
-        }`
+        `合并 No.${path.split("_")[1]}`
       );
     });
   });
